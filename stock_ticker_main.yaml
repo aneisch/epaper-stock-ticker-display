@@ -122,6 +122,23 @@ text:
 # Text sensors to hold values for display or automation
 text_sensor:
   - platform: template
+    name: "Last Update ET"
+    id: timestamp_eastern_time
+    lambda: |-
+      time_t rawtime = strtoul(id(timestamp).state.c_str(), nullptr, 10);
+      char buffer[32];
+      setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1);  // Eastern Time with DST rules
+      tzset();
+      struct tm * timeinfo = localtime(&rawtime);
+      strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+      return std::string(buffer);
+  - platform: template
+    name: "Last Update Epoch"
+    id: timestamp
+    on_value:
+      then:
+        - component.update: timestamp_eastern_time
+  - platform: template
     name: "Price"
     id: price
   - platform: template
@@ -168,18 +185,60 @@ script:
                       lambda: return response->status_code == 200;
                   then:
                     - lambda: |-
+                        if (body.length() == 0) {
+                          ESP_LOGW("main", "HTTP response body is empty — skipping parse.");
+                          id(timestamp).publish_state("N/A");
+                          id(symbol).publish_state("N/A");
+                          id(price).publish_state("?.??");
+                          id(change_pct).publish_state("?.??");
+                          return;
+                        }
+
                         ESP_LOGD("main","Fetch got: %s", body.c_str());
                         json::parse_json(body, [](JsonObject root) -> bool {
-                            if (root["price"]) {
-                                id(price).publish_state(root["price"]);
-                                id(symbol).publish_state(root["symbol"]);
-                                id(change_pct).publish_state(root["changesPercentage"]);
-                                return true;
-                            }
-                            else {
-                              ESP_LOGD("main","Missing data in json (need symbol, price, change_pct)!");
-                              return false;
-                            }
+                          bool valid = true;
+
+                          // Last Update
+                          if (root.containsKey("timestamp")) {
+                            id(timestamp).publish_state(root["timestamp"].as<std::string>());
+                          } else {
+                            ESP_LOGW("main", "Missing key: timestamp");
+                            id(timestamp).publish_state("N/A");
+                            valid = false;
+                          }
+
+                          // Symbol
+                          if (root.containsKey("symbol")) {
+                            id(symbol).publish_state(root["symbol"].as<std::string>());
+                          } else {
+                            ESP_LOGW("main", "Missing key: symbol");
+                            id(symbol).publish_state("N/A");
+                            valid = false;
+                          }
+
+                          // Price
+                          if (root.containsKey("price")) {
+                            id(price).publish_state(root["price"].as<std::string>());
+                          } else {
+                            ESP_LOGW("main", "Missing key: price");
+                            id(price).publish_state("?.??");
+                            valid = false;
+                          }
+
+                          // Change Percentage
+                          if (root.containsKey("changesPercentage")) {
+                            // Round to two decimals (optional)
+                            float pct = root["changesPercentage"].as<float>();
+                            char formatted[16];
+                            snprintf(formatted, sizeof(formatted), "%.2f", pct);
+                            id(change_pct).publish_state(std::string(formatted));
+                          } else {
+                            ESP_LOGW("main", "Missing key: changesPercentage");
+                            id(change_pct).publish_state("?.??");
+                            valid = false;
+                          }
+
+                          return valid;
                         });
                     - component.update: eink_display
                   else:
