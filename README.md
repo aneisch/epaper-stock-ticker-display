@@ -29,7 +29,7 @@ This project displays live stock ticker data on a 2.13" ePaper screen using ESPH
 
 ## Features
 
-- **Smart market-hours logic**: Only updates when markets are open (M–F, 8:30AM – 4:00PM ET).
+- **Smart market-hours logic**: Only updates when markets are open (inclusive of pre and post-market).
 - **WiFi fallback mode**: Auto-starts Access Point + captive portal if no connection is available.
 - **User-adjustable refresh interval**: From 30 seconds to 1 hour.
 - **OTA firmware updates** via ESPHome dashboard, command line, or web interface.
