@@ -122,22 +122,11 @@ text:
 # Text sensors to hold values for display or automation
 text_sensor:
   - platform: template
-    name: "Last Update ET"
-    id: timestamp_eastern_time
-    lambda: |-
-      time_t rawtime = strtoul(id(timestamp).state.c_str(), nullptr, 10);
-      char buffer[32];
-      setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1);  // Eastern Time with DST rules
-      tzset();
-      struct tm * timeinfo = localtime(&rawtime);
-      strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
-      return std::string(buffer);
-  - platform: template
-    name: "Last Update Epoch"
+    name: "Last Update"
     id: timestamp
-    on_value:
-      then:
-        - component.update: timestamp_eastern_time
+  - platform: template
+    name: "Market Period"
+    id: period
   - platform: template
     name: "Price"
     id: price
@@ -162,7 +151,7 @@ text_sensor:
       #else
       return {"N/A"};
       #endif
-    update_interval: 1s
+    update_interval: 2s
 
 switch:
   - platform: template
@@ -207,6 +196,15 @@ script:
                             valid = false;
                           }
 
+                          // Period
+                          if (root.containsKey("period")) {
+                            id(period).publish_state(root["period"].as<std::string>());
+                          } else {
+                            ESP_LOGW("main", "Missing key: period");
+                            id(period).publish_state("N/A");
+                            valid = false;
+                          }
+
                           // Symbol
                           if (root.containsKey("symbol")) {
                             id(symbol).publish_state(root["symbol"].as<std::string>());
@@ -217,8 +215,8 @@ script:
                           }
 
                           // Price
-                          if (root.containsKey("price")) {
-                            id(price).publish_state(root["price"].as<std::string>());
+                          if (root.containsKey("latestPrice")) {
+                            id(price).publish_state(root["latestPrice"].as<std::string>());
                           } else {
                             ESP_LOGW("main", "Missing key: price");
                             id(price).publish_state("?.??");
@@ -226,14 +224,10 @@ script:
                           }
 
                           // Change Percentage
-                          if (root.containsKey("changesPercentage")) {
-                            // Round to two decimals (optional)
-                            float pct = root["changesPercentage"].as<float>();
-                            char formatted[16];
-                            snprintf(formatted, sizeof(formatted), "%.2f", pct);
-                            id(change_pct).publish_state(std::string(formatted));
+                          if (root.containsKey("changePercentage")) {
+                            id(change_pct).publish_state(root["changePercentage"].as<std::string>());
                           } else {
-                            ESP_LOGW("main", "Missing key: changesPercentage");
+                            ESP_LOGW("main", "Missing key: changePercentage");
                             id(change_pct).publish_state("?.??");
                             valid = false;
                           }
@@ -276,27 +270,46 @@ interval:
               auto now = id(time_et).now();
               if (!now.is_valid()) return false;
 
-              // Only allow Mon–Fri (0=Sun, 1=Mon, ..., 6=Sat)
-              if (now.day_of_week < 1 || now.day_of_week > 5) {
-                ESP_LOGD("main", "Weekend — skipping.");
+              // Normalize day of week: 0 = Sunday, ..., 6 = Saturday
+              // Force DOW into 0–6 range and fix known offset
+              int dow = (now.day_of_week + 6) % 7;
+              const char* days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
+              // Now dow is: 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+              if (dow < 1 || dow > 5) {
+                ESP_LOGD("main", "Weekend — skipping. Now: %04d-%02d-%02d %02d:%02d:%02d — %s (dow=%d)",
+                now.year, now.month, now.day_of_month,
+                now.hour, now.minute, now.second,
+                days[dow], dow);
                 return false;
               }
 
-              // Compare time to see if the market is open
+              // Allow from 4:00 AM (240) to 8:00 PM (1200) for pre and post market on weekdays
               int minutes_since_midnight = now.hour * 60 + now.minute;
-              // 8:30 AM = 510, 4:00 PM = 960
-              return minutes_since_midnight >= 510 && minutes_since_midnight <= 960;
+              if (minutes_since_midnight >= 240 && minutes_since_midnight <= 1200) {
+                ESP_LOGD("main", "Weekday — running. Now: %04d-%02d-%02d %02d:%02d:%02d — %s (dow=%d)",
+                  now.year, now.month, now.day_of_month,
+                  now.hour, now.minute, now.second,
+                  days[dow], dow);
+                return true;
+              }
+
+              // Didn't return, so weekday outside of hours
+              ESP_LOGD("main", "Weekday outside of hours - skipping. Now: %04d-%02d-%02d %02d:%02d:%02d — %s (dow=%d)",
+                now.year, now.month, now.day_of_month,
+                now.hour, now.minute, now.second,
+                days[dow], dow);
+              return false;
           then:
             - lambda: |-
                 static int counter = 0;
                 counter++;
+                counter = std::min(counter, 100000); 
                 if (counter >= id(update_interval).state && id(wifi_status) == 1) {
                   counter = 0;
                   ESP_LOGD("Display", "Triggered update on interval...");
                   id(fetch_and_update).execute();
                 }
-          else:
-            - logger.log: "Outside of allowed time window"
 
   # Update wifi status so we can display AP info or connection attempt
   - interval: 10s

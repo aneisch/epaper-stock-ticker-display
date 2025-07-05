@@ -62,9 +62,10 @@ To display a custom ticker, your JSON endpoint must return:
 ```json
 {
   "symbol": "AAPL",
-  "price": 192.45,
-  "changesPercentage": "+1.53",
-  "timestamp": 1751558879
+  "timestamp": "2025-07-03T15:59:58-05:00",
+  "changePercentage": "-0.88",
+  "latestPrice": 196.11,
+  "period": "post-market"
 }
 ```
 
@@ -125,10 +126,6 @@ Includes [Montserrat Black](https://fonts.google.com/specimen/Montserrat) in 3 s
 
 - **View Logs** via ESPHome CLI or Web UI.
 - Log level: `DEBUG`
-- Example:  
-  ```text
-  [main] Fetch got: {"symbol":"AAPL","price":192.45,"changesPercentage":1.53, "timestamp": 1751558879}
-  ```
 
 ---
 
