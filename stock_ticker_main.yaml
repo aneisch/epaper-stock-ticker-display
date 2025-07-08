@@ -74,13 +74,13 @@ globals:
 
 font:
   - file: "fonts/Montserrat-Black.ttf"
-    id: ticker_font
+    id: medium
     size: 20
   - file: "fonts/Montserrat-Black.ttf"
-    id: wifi_font
+    id: small
     size: 12
   - file: "fonts/Montserrat-Black.ttf"
-    id: price_font
+    id: large
     size: 50
 
 # Define SPI ports
@@ -256,6 +256,7 @@ interval:
             - script.execute: fetch_and_update
 
   # Subsequent Updates - Selectable interval for fetch - only update during market hours
+  # 1s interval so we can increase a counter to check whether we need to refresh the display
   - interval: 1s
     then:
       - if:
@@ -284,9 +285,9 @@ interval:
                 return false;
               }
 
-              // Allow from 4:00 AM (240) to 8:00 PM (1200) for pre and post market on weekdays
+              // Allow from 8:00 AM (480) to 8:05 PM (1205) for pre and post market on weekdays
               int minutes_since_midnight = now.hour * 60 + now.minute;
-              if (minutes_since_midnight >= 240 && minutes_since_midnight <= 1200) {
+              if (minutes_since_midnight >= 480 && minutes_since_midnight <= 1205) {
                 ESP_LOGD("main", "Weekday — running. Now: %04d-%02d-%02d %02d:%02d:%02d — %s (dow=%d)",
                   now.year, now.month, now.day_of_month,
                   now.hour, now.minute, now.second,
@@ -345,21 +346,28 @@ display:
     lambda: |-
       // Trying to connect to WiFi
       if(id(wifi_status) == 0 and id(wifi_mode).state == "STA" ){
-        it.printf(125, 50, id(ticker_font), TextAlign::CENTER, "WiFi connecting");      
-        it.printf(125, 90, id(ticker_font), TextAlign::CENTER, "60s timeout...");      
+        it.printf(125, 50, id(medium), TextAlign::CENTER, "WiFi connecting");      
+        it.printf(125, 90, id(medium), TextAlign::CENTER, "60s timeout...");      
       }
 
       // Can't connect to WiFi, in AP mode
       if(id(wifi_status) == 0 and id(wifi_mode).state == "AP" ){
-        it.printf(125, 10, id(ticker_font), TextAlign::CENTER, "Configure WiFi");      
-        it.printf(125, 35, id(ticker_font), TextAlign::CENTER, "by connecting to");      
-        it.printf(125, 65, id(ticker_font), TextAlign::CENTER, "'Stock Fallback AP'");    
-        it.printf(125, 95, id(wifi_font), TextAlign::CENTER, "You may need to browse to:");      
-        it.printf(125, 110, id(wifi_font), TextAlign::CENTER, "http://192.168.4.1 after connecting");     
+        it.printf(125, 10, id(medium), TextAlign::CENTER, "Configure WiFi");      
+        it.printf(125, 35, id(medium), TextAlign::CENTER, "by connecting to");      
+        it.printf(125, 65, id(medium), TextAlign::CENTER, "'Stock Fallback AP'");    
+        it.printf(125, 95, id(small), TextAlign::CENTER, "You may need to browse to:");      
+        it.printf(125, 110, id(small), TextAlign::CENTER, "http://192.168.4.1 after connecting");     
       }
  
       // Normal active WiFi connection
       if(id(wifi_status) == 1 and id(wifi_mode).state == "STA" ){
-        it.printf(125, 50, id(price_font), TextAlign::CENTER, "$%s", id(price).state.c_str());
-        it.printf(125, 110, id(ticker_font), TextAlign::CENTER, "%s %s%%", id(symbol).state.c_str(), id(change_pct).state.c_str());
+        float price_float = atof(id(price).state.c_str());
+        float pct_float = atof(id(change_pct).state.c_str());
+
+        it.printf(125, 50, id(large), TextAlign::CENTER, "$%.2f", price_float);
+        // Show pre-market / post-market tag
+        if (id(period).state == "pre-market" || id(period).state == "after-hours") {
+          it.printf(125, 87, id(small), TextAlign::CENTER, "%s", id(period).state.c_str());
+        }
+        it.printf(125, 110, id(medium), TextAlign::CENTER, "%s %.2f%%", id(symbol).state.c_str(), pct_float);
       }
