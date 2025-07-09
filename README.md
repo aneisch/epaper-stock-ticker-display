@@ -31,7 +31,7 @@ This project displays live stock ticker data on a 2.13" ePaper screen using ESPH
 
 - **Smart market-hours logic**: Only updates when markets are open (inclusive of pre and post-market).
 - **WiFi fallback mode**: Auto-starts Access Point + captive portal if no connection is available.
-- **User-adjustable refresh interval**: From 30 seconds to 1 hour (default 2 minutes).
+- **User-adjustable fetch interval**: From 30 seconds to 1 hour (default 30 seconds). Only updates display if change occurred
 - **OTA firmware updates** via ESPHome dashboard, command line, or web interface.
 - **Local Web UI**: For easy manual control and diagnostics. You can connect via the name.local, eg: `http://stock_ticker_display_main.local`
 - **Supports Custom HTTP endpoint** for price data (must return JSON).

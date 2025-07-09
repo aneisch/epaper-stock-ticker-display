@@ -71,6 +71,22 @@ globals:
     type: bool
     restore_value: no
     initial_value: "false"
+  - id: last_symbol
+    type: std::string
+    initial_value: '""'
+  - id: last_price
+    type: std::string
+    initial_value: '""'
+  - id: last_change_pct
+    type: std::string
+    initial_value: '""'
+  - id: last_timestamp
+    type: std::string
+    initial_value: '""'
+  - id: last_period
+    type: std::string
+    initial_value: '""'
+
 
 font:
   - file: "fonts/Montserrat-Black.ttf"
@@ -94,16 +110,17 @@ http_request:
   verify_ssl: false
   timeout: 10s
 
-# Selectable update interval (use web frontend)
+# Selectable fetch interval (use web frontend to modify)
+# Fetch data and update display if fetched values change
 number:
   - platform: template
-    name: "Update Interval (Seconds)"
+    name: "Refresh Interval (Seconds)"
     id: update_interval
     optimistic: true
     min_value: 30
     max_value: 3600
     step: 1
-    initial_value: 120
+    initial_value: 30
     restore_value: true
     mode: box
 
@@ -161,7 +178,6 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
 
 script:
-  # Fetch ticker info from http endpoint and update sensor values from fetched JSON
   - id: fetch_and_update
     then:
       - http_request.get:
@@ -171,11 +187,11 @@ script:
             then:
               - if:
                   condition:
-                      lambda: return response->status_code == 200;
+                    lambda: return response->status_code == 200;
                   then:
                     - lambda: |-
-                        if (body.length() == 0) {
-                          ESP_LOGW("main", "HTTP response body is empty — skipping parse.");
+                        if (body.length() <= 0) {
+                          ESP_LOGW("main", "HTTP response body is empty or unknown length — skipping parse.");
                           id(timestamp).publish_state("N/A");
                           id(symbol).publish_state("N/A");
                           id(price).publish_state("?.??");
@@ -183,61 +199,55 @@ script:
                           return;
                         }
 
-                        ESP_LOGD("main","Fetch got: %s", body.c_str());
-                        json::parse_json(body, [](JsonObject root) -> bool {
-                          bool valid = true;
+                        ESP_LOGD("main", "Raw response: %s", body.c_str());
 
-                          // Last Update
-                          if (root.containsKey("timestamp")) {
-                            id(timestamp).publish_state(root["timestamp"].as<std::string>());
-                          } else {
-                            ESP_LOGW("main", "Missing key: timestamp");
-                            id(timestamp).publish_state("N/A");
-                            valid = false;
-                          }
+                        bool changed = false;
+                        bool valid = true;
 
-                          // Period
-                          if (root.containsKey("period")) {
-                            id(period).publish_state(root["period"].as<std::string>());
-                          } else {
-                            ESP_LOGW("main", "Missing key: period");
-                            id(period).publish_state("N/A");
-                            valid = false;
-                          }
+                        bool parsed = json::parse_json(body, [&](JsonObject root) -> bool {
+                          auto update_if_changed = [&](const char* key, std::string &current, std::string &last, TextSensor *sensor) {
+                            if (root.containsKey(key)) {
+                              current = root[key].as<std::string>();
+                              if (current != last) {
+                                sensor->publish_state(current);
+                                last = current;
+                                changed = true;
+                              }
+                            } else {
+                              ESP_LOGW("main", "Missing key: %s", key);
+                              current = "N/A";
+                              sensor->publish_state(current);
+                              last = current;
+                              changed = true;
+                              valid = false;
+                            }
+                          };
 
-                          // Symbol
-                          if (root.containsKey("symbol")) {
-                            id(symbol).publish_state(root["symbol"].as<std::string>());
-                          } else {
-                            ESP_LOGW("main", "Missing key: symbol");
-                            id(symbol).publish_state("N/A");
-                            valid = false;
-                          }
+                          std::string curr_sym, curr_price, curr_pct, curr_time, curr_period;
 
-                          // Price
-                          if (root.containsKey("latestPrice")) {
-                            id(price).publish_state(root["latestPrice"].as<std::string>());
-                          } else {
-                            ESP_LOGW("main", "Missing key: price");
-                            id(price).publish_state("?.??");
-                            valid = false;
-                          }
-
-                          // Change Percentage
-                          if (root.containsKey("changePercentage")) {
-                            id(change_pct).publish_state(root["changePercentage"].as<std::string>());
-                          } else {
-                            ESP_LOGW("main", "Missing key: changePercentage");
-                            id(change_pct).publish_state("?.??");
-                            valid = false;
-                          }
+                          update_if_changed("symbol", curr_sym, id(last_symbol), id(symbol));
+                          update_if_changed("latestPrice", curr_price, id(last_price), id(price));
+                          update_if_changed("changePercentage", curr_pct, id(last_change_pct), id(change_pct));
+                          update_if_changed("timestamp", curr_time, id(last_timestamp), id(timestamp));
+                          update_if_changed("period", curr_period, id(last_period), id(period));
 
                           return valid;
                         });
-                    - component.update: eink_display
+
+                        if (!parsed) {
+                          ESP_LOGE("main", "Failed to parse JSON — possible Cloudflare block or malformed response.");
+                          return;
+                        }
+
+                        if (changed) {
+                          ESP_LOGD("main", "Data changed — refreshing display");
+                          id(eink_display).update();
+                        } else {
+                          ESP_LOGD("main", "No data changes — skipping display update");
+                        }
                   else:
                     - logger.log:
-                        format: "Error: Response status: %d, message %s"
+                        format: "Error: Response status: %d, body: %s"
                         args: [ 'response->status_code', 'body.c_str()' ]
 
 interval:
