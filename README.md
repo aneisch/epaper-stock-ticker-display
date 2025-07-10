@@ -31,7 +31,7 @@ This project displays live stock ticker data on a 2.13" ePaper screen using ESPH
 
 - **Smart market-hours logic**: Only updates when markets are open (inclusive of pre and post-market).
 - **WiFi fallback mode**: Auto-starts Access Point + captive portal if no connection is available.
-- **User-adjustable fetch interval**: From 30 seconds to 1 hour (default 30 seconds). Only updates display if change occurred
+- **User-adjustable fetch interval**: From 30 seconds to 1 hour (default 30 seconds). Only updates display if change occurred.
 - **OTA firmware updates** via ESPHome dashboard, command line, or web interface.
 - **Local Web UI**: For easy manual control and diagnostics. You can connect via the name.local, eg: `http://stock_ticker_display_main.local`
 - **Supports Custom HTTP endpoint** for price data (must return JSON).
@@ -57,7 +57,7 @@ substitutions:
 
 ### JSON Endpoint Format
 
-To display a custom ticker, your JSON endpoint *must* return at minimum:
+To display a custom ticker, your JSON endpoint *must* return the below at minimum. Your endpoint can be protected or hosted locally. ESPHome supports SSL (validation disabled by default).
 
 ```json
 {
@@ -65,11 +65,13 @@ To display a custom ticker, your JSON endpoint *must* return at minimum:
   "timestamp": "2025-07-03T15:59:58-05:00",
   "changePercentage": "-0.88",
   "latestPrice": 196.11,
-  "period": "post-market"
-}
-```
+  "period": "after-hours"
 
-> Your endpoint can be protected or hosted locally. ESPHome supports SSL (optional).
+```
+Valid Entries for `period`: `['pre-market', 'regular-market', 'after-hours']`
+
+Note: `$` will be prepended to `latestPrice` on display. `%` will be appended to `changePercentage` on display.
+
 
 ---
 

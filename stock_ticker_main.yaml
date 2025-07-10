@@ -33,12 +33,14 @@ wifi:
     then:
       - lambda: |-
           id(wifi_status) = 1;
+          id(eink_display).set_full_update_every(1);
       - delay: 5s
       - component.update: eink_display
   on_disconnect:
     then:
       - lambda: |-
           id(wifi_status) = 0 ;
+          id(eink_display).set_full_update_every(1);
       - component.update: eink_display
 
 # Redirect to WiFi credential input if in AP
@@ -119,7 +121,7 @@ number:
     optimistic: true
     min_value: 30
     max_value: 3600
-    step: 1
+    step: 10
     initial_value: 30
     restore_value: true
     mode: box
@@ -158,17 +160,20 @@ text_sensor:
     id: wifi_mode
     lambda: |-   
       #ifdef USE_ESP32
+      static std::string last_mode;
       wifi_mode_t mode;
       esp_wifi_get_mode(&mode);
-      if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA) {
-        return {"AP"};
+      std::string new_mode = (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA) ? "AP" : "STA";
+      if (new_mode != last_mode) {
+        last_mode = new_mode;
+        return new_mode;
       } else {
-        return {"STA"};
+        return {};
       }
       #else
       return {"N/A"};
       #endif
-    update_interval: 2s
+    update_interval: 5s
 
 switch:
   - platform: template
@@ -178,6 +183,15 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
 
 script:
+  - id: partial_update
+    then:
+      - lambda: 'id(eink_display).set_full_update_every(50);'
+      - component.update: eink_display
+      - delay: 300ms
+      - component.update: eink_display
+      - delay: 300ms
+      - component.update: eink_display
+
   - id: fetch_and_update
     then:
       - http_request.get:
@@ -240,8 +254,17 @@ script:
                         }
 
                         if (changed) {
-                          ESP_LOGD("main", "Data changed — refreshing display");
-                          id(eink_display).update();
+                          // Full refresh on first update
+                          if (id(first_update_done) != true){
+                            ESP_LOGD("main", "First update — fully refreshing display");
+                            id(eink_display).update();
+                          }
+                          // Partial refresh on all subsequent
+                          else {
+                            ESP_LOGD("main", "Data changed — partially refreshing display");
+                            // Call Partial Update Script
+                            id(partial_update).execute();
+                          }
                         } else {
                           ESP_LOGD("main", "No data changes — skipping display update");
                         }
@@ -262,12 +285,13 @@ interval:
           then:
             - lambda: |-
                 ESP_LOGD("Display", "Triggered initial display update...");
-            - lambda: "id(first_update_done) = true;"
             - script.execute: fetch_and_update
+            - lambda: "id(first_update_done) = true;"
 
   # Subsequent Updates - Selectable interval for fetch - only update during market hours
-  # 1s interval so we can increase a counter to check whether we need to refresh the display
-  - interval: 1s
+  # 5s interval so we can increase a counter to check whether we need to refresh the display
+  # Must update the counter at bottom of interval lambda to increment by this interval as well
+  - interval: 10s
     then:
       - if:
           condition:
@@ -298,7 +322,7 @@ interval:
               // Allow from 8:00 AM (480) to 8:05 PM (1205) for pre and post market on weekdays
               int minutes_since_midnight = now.hour * 60 + now.minute;
               if (minutes_since_midnight >= 480 && minutes_since_midnight <= 1205) {
-                ESP_LOGD("main", "Weekday — running. Now: %04d-%02d-%02d %02d:%02d:%02d — %s (dow=%d)",
+                ESP_LOGD("main", "Weekday — evaluating changes. Now: %04d-%02d-%02d %02d:%02d:%02d — %s (dow=%d)",
                   now.year, now.month, now.day_of_month,
                   now.hour, now.minute, now.second,
                   days[dow], dow);
@@ -314,7 +338,7 @@ interval:
           then:
             - lambda: |-
                 static int counter = 0;
-                counter++;
+                counter+=10;
                 counter = std::min(counter, 100000); 
                 if (counter >= id(update_interval).state && id(wifi_status) == 1) {
                   counter = 0;
@@ -327,13 +351,12 @@ interval:
     then:
       - if:
           condition:
-            and:
-              - wifi.connected:
+            - wifi.connected:
           then:
-            - lambda: |-
-                ESP_LOGD("main", "Wifi Status: %d Wifi Mode: %s",
-                  id(wifi_status),
-                  id(wifi_mode).state.c_str());  
+            # - lambda: |-
+            #     ESP_LOGD("main", "Wifi Status: %d Wifi Mode: %s",
+            #       id(wifi_status),
+            #       id(wifi_mode).state.c_str());  
           else:
             - delay: 5s
             - lambda: |-
@@ -350,6 +373,7 @@ display:
     busy_pin: ${busy_pin} # Purple
     reset_pin: ${reset_pin} # White
     model: 2.13in-ttgo-b74
+    # Default/at boot do full display update everytime, this is modified elsewhere
     full_update_every: 1
     update_interval: never # Update from interval or automation only
     rotation: 270°
@@ -371,13 +395,10 @@ display:
  
       // Normal active WiFi connection
       if(id(wifi_status) == 1 and id(wifi_mode).state == "STA" ){
-        float price_float = atof(id(price).state.c_str());
-        float pct_float = atof(id(change_pct).state.c_str());
-
-        it.printf(125, 50, id(large), TextAlign::CENTER, "$%.2f", price_float);
+        it.printf(125, 50, id(large), TextAlign::CENTER, "$%s", id(price).state.c_str());
         // Show pre-market / post-market tag
         if (id(period).state == "pre-market" || id(period).state == "after-hours") {
           it.printf(125, 87, id(small), TextAlign::CENTER, "%s", id(period).state.c_str());
         }
-        it.printf(125, 110, id(medium), TextAlign::CENTER, "%s %.2f%%", id(symbol).state.c_str(), pct_float);
+        it.printf(125, 110, id(medium), TextAlign::CENTER, "%s %s%%", id(symbol).state.c_str(), id(change_pct).state.c_str());
       }
