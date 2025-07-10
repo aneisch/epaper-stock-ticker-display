@@ -66,7 +66,7 @@ To display a custom ticker, your JSON endpoint *must* return the below at minimu
   "changePercentage": "-0.88",
   "latestPrice": 196.11,
   "period": "after-hours"
-
+}
 ```
 Valid Entries for `period`: `['pre-market', 'regular-market', 'after-hours']`
 
@@ -85,6 +85,8 @@ Note: `$` will be prepended to `latestPrice` on display. `%` will be appended to
 
 ![Fallback](images/fallback.jpg)
 
+When switching between display modes, the epaper deisplay will do a full refresh. After the first two pricing updates, the display will fall back to a partial refresh, with a full refresh occuring every 50 refreshes (to clean up ghosting)
+
 ---
 
 ## Automation & Scripts
@@ -99,6 +101,9 @@ Note: `$` will be prepended to `latestPrice` on display. `%` will be appended to
   - Selected refresh interval
   - WiFi connected status
 
+### Partial display update:
+- Sets set_full_update_every to ensure only partial update
+- Refreshes display (3x) with a delay in between to clean up artifacts
 ---
 
 ## Secrets.yaml
