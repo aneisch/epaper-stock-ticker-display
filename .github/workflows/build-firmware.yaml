@@ -22,18 +22,6 @@ jobs:
       - name: Get short SHA
         run: 'echo "SHORT_SHA=${GITHUB_SHA: -7}" >> $GITHUB_ENV'
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-        with:
-          tag_name: ${{ env.SHORT_SHA }}
-          release_name: Release for ${{ env.SHORT_SHA }}
-          body: Release to hold OTA for ${{ env.SHORT_SHA }}
-          draft: false
-          prerelease: false
-
       - name: Create release with compiled OTA firmware file
         uses: softprops/action-gh-release@v2.3.2
         with:
