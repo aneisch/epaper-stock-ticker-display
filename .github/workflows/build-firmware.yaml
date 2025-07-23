@@ -18,3 +18,8 @@ jobs:
         uses: esphome/build-action@v6
         with:
           yaml-file: stock_ticker_main.yaml
+
+      - name: Create release with compiled OTA firmware file
+        uses: softprops/action-gh-release@v2.3.2
+        with:
+          files: stock_ticker_display_main-esp32c3/stock_ticker_display_main-esp32c3.ota.bin
