@@ -25,9 +25,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
-          tag_name: ${{ github.sha[-7:] }}
-          release_name: Release for ${{ github.sha[-7:] }}
-          body: Release to hold OTA for ${{ github.sha[-7:] }}
+          tag_name: ${{ substr(github.sha, -7) }}
+          release_name: Release for ${{ substr(github.sha, -7) }}
+          body: Release to hold OTA for ${{ substr(github.sha, -7) }}
           draft: false
           prerelease: false
 
@@ -35,4 +35,4 @@ jobs:
         uses: softprops/action-gh-release@v2.3.2
         with:
           files: stock_ticker_display_main-esp32c3/stock_ticker_display_main-esp32c3.ota.bin
-          tag_name: ${{ github.sha[-7:] }}
+          tag_name: ${{ substr(github.sha, -7) }}
