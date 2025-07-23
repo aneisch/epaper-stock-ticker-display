@@ -20,7 +20,7 @@ jobs:
           yaml-file: stock_ticker_main.yaml
 
       - name: Get short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA: -7}" >> $GITHUB_ENV
+        run: 'echo "SHORT_SHA=${GITHUB_SHA: -7}" >> $GITHUB_ENV'
 
       - name: Create Release
         id: create_release
