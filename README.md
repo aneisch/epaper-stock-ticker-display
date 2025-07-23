@@ -142,4 +142,4 @@ Includes [Montserrat Black](https://fonts.google.com/specimen/Montserrat) in 3 s
 esphome run stock_ticker_display.yaml
 ```
 
-Or upload a compiled binary via the OTA update mechanism on the web interface (you can connect via the name.local, eg: `http://stock_ticker_display_main.local`, or via the captive/WiFi setup interface) after the first flash.
+Or upload a compiled binary via the OTA update mechanism on the web interface (you can connect via the name.local, eg: `http://stock_ticker_display_main.local`, or via the captive/WiFi setup interface) after the first flash. A compiled binary in OTA format is available in this repository's releases. You can use this and then tweak the parameters via the web interface.
