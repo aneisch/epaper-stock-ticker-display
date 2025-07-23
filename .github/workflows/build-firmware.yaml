@@ -19,15 +19,18 @@ jobs:
         with:
           yaml-file: stock_ticker_main.yaml
 
+      - name: Get short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA: -7}" >> $GITHUB_ENV
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
-          tag_name: ${{ substr(github.sha, -7) }}
-          release_name: Release for ${{ substr(github.sha, -7) }}
-          body: Release to hold OTA for ${{ substr(github.sha, -7) }}
+          tag_name: ${{ env.SHORT_SHA }}
+          release_name: Release for ${{ env.SHORT_SHA }}
+          body: Release to hold OTA for ${{ env.SHORT_SHA }}
           draft: false
           prerelease: false
 
@@ -35,4 +38,4 @@ jobs:
         uses: softprops/action-gh-release@v2.3.2
         with:
           files: stock_ticker_display_main-esp32c3/stock_ticker_display_main-esp32c3.ota.bin
-          tag_name: ${{ substr(github.sha, -7) }}
+          tag_name: ${{ env.SHORT_SHA }}
